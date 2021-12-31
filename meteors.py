@@ -3,7 +3,10 @@ import pygame, sys, random
 class SpaceShip(pygame.sprite.Sprite):
     def __init__(self, path, x_pos, y_pos):
         super().__init__()
-        self.image = pygame.image.load(path)
+        self.uncharged = pygame.image.load(path)
+        self.charged = pygame.image.load('spaceship_charged.png')
+
+        self.image = self.uncharged
         self.rect = self.image.get_rect(center = (x_pos, y_pos))
         self.shield_surface = pygame.image.load('shield.png')
         self.health = 5
@@ -23,6 +26,15 @@ class SpaceShip(pygame.sprite.Sprite):
     def display_health(self):
         for index, shield in enumerate(range(self.health)):
             screen.blit(self.shield_surface, (10 + index * 40, 10))
+
+    def get_damage(self, amount):
+        self.health -= amount
+
+    def charge(self):
+        self.image = self.charged
+
+    def discharge(self):
+        self.image = self.uncharged
 
 class Meteor(pygame.sprite.Sprite):
     def __init__(self, path, x_pos, y_pos, x_speed, y_speed):
@@ -51,6 +63,40 @@ class Laser(pygame.sprite.Sprite):
         if self.rect.centery <= -100:
             self.kill()
 
+def main_game():
+    global laser_active
+
+    laser_group.draw(screen)
+    spaceship_group.draw(screen)
+    meteor_group.draw(screen)
+
+    laser_group.update()
+    spaceship_group.update()
+    meteor_group.update()
+
+    # collisions
+    if pygame.sprite.spritecollide(spaceship_group.sprite, meteor_group, True):
+        spaceship_group.sprite.get_damage(1)
+    
+    for laser in laser_group:
+        pygame.sprite.spritecollide(laser, meteor_group, True)
+
+    # laser timer
+    if pygame.time.get_ticks() - laser_timer >= 1000:
+        laser_active = True
+        spaceship_group.sprite.charge()
+
+    return 1
+
+def end_game():
+    text_surface = game_font.render('GAME OVER', True, (255, 255, 255))
+    text_rect = text_surface.get_rect(center = (640, 340))
+    screen.blit(text_surface, text_rect)
+
+    score_surface = game_font.render(f' Score: {score}', True, (255, 255, 255))
+    score_rect = score_surface.get_rect(center = (640,380))
+    screen.blit(score_surface, score_rect)
+
 pygame.init()
 
 meteor_position_y = 640
@@ -58,6 +104,12 @@ meteor_speed = 1
 
 screen = pygame.display.set_mode((1280, 720))
 clock = pygame.time.Clock()
+game_font = pygame.font.Font('LazenbyCompSmooth.ttf', 40)
+
+score = 0
+
+laser_timer = 0
+laser_active = False
 
 spaceship = SpaceShip('spaceship.png', 640, 500)
 spaceship_group = pygame.sprite.GroupSingle()
@@ -76,6 +128,20 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
+        
+        if event.type == pygame.MOUSEBUTTONDOWN and laser_active:
+            new_laser = Laser('Laser.png', event.pos, 15)
+            laser_group.add(new_laser)
+            laser_active = False
+            laser_timer = pygame.time.get_ticks()
+            spaceship_group.sprite.discharge()
+
+        
+        if event.type == pygame.MOUSEBUTTONDOWN and spaceship_group.sprite.health <= 0:
+            spaceship_group.sprite.health = 5
+            meteor_group.empty()
+            score = 0
+
         if event.type == METEOR_EVENT:
             meteor_path = random.choice(('Meteor1.png', 'Meteor2.png', 'Meteor3.png'))
             random_x_pos = random.randrange(0, 1280)
@@ -84,19 +150,16 @@ while True:
             random_y_speed = random.randrange(4, 10)
             meteor = Meteor(meteor_path, random_x_pos, random_y_pos, random_x_speed, random_y_speed)
             meteor_group.add(meteor)
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            new_laser = Laser('Laser.png', event.pos, 15)
-            laser_group.add(new_laser)
+
+
+        
 
     screen.fill((42, 45, 51))
+    if spaceship_group.sprite.health > 0:
+        score += main_game()
+    else:
+        end_game()
 
-    laser_group.draw(screen)
-    spaceship_group.draw(screen)
-    meteor_group.draw(screen)
-
-    laser_group.update()
-    spaceship_group.update()
-    meteor_group.update()
 
     pygame.display.update()
     clock.tick(120)
